@@ -1,9 +1,11 @@
-use std::{env, error::Error, time::Duration};
+use std::{collections::HashSet, env, error::Error, sync::{Arc, Mutex}, time::Duration};
 
+use axum::{routing::{get, post}, Json, Router};
 use futures::StreamExt;
 use libp2p::{
-    identify, identity::Keypair, noise, ping, rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux, Multiaddr, Swarm
+    identify, identity::Keypair, noise, ping, rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux, Multiaddr, PeerId, Swarm
 };
+use tokio::sync::mpsc;
 use tracing_subscriber::EnvFilter;
 
 use dotenv;
@@ -39,7 +41,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
         .with_tokio()
         .with_tcp(
-            tcp::Config::default().ttl(20),
+            tcp::Config::default(),
             noise::Config::new,
             yamux::Config::default,
         )?
@@ -55,43 +57,89 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     listen_on_all_interfaces(&mut swarm);
 
-    while let Some(event) = swarm.next().await {
-        match event {
-            SwarmEvent::NewListenAddr { address, .. } => tracing::info!("Listening on {address:?}"),
-            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                tracing::info!("Connected to {}", peer_id);
+    let peers_set = Arc::new(Mutex::new(HashSet::<PeerId>::new()));
+
+    let peers_clone = peers_set.clone();
+    tokio::spawn(async move {
+        let app = Router::new()
+            .route("/peers", get({
+                let peers = peers_clone.clone();
+                move || {
+                    let peers = peers.lock().unwrap().clone().iter().map(|p| p.to_string()).collect::<Vec<_>>();
+                    async move { Json(peers) }
+                }
+            }))
+        ;
+
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:8001").await.unwrap();
+
+        axum::serve(listener, app)
+            .await
+            .unwrap();
+    });
+
+    let mut ping_peers_tick = tokio::time::interval(Duration::from_secs(10));
+
+    loop {
+
+        tokio::select! {
+            /*
+            _ = ping_peers_tick.tick() => {
+                for peer in peers_set.lock().unwrap().iter() {
+                    tracing::info!("Pinging {peer}");
+                    swarm.dial(*peer)?;
+                }
             }
-            SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                tracing::info!("Disconnected from {}", peer_id);
-            }
-            SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
-                rendezvous::server::Event::PeerRegistered { peer, registration },
-            )) => {
-                tracing::info!(
-                    "Peer {} registered for namespace '{}'",
-                    peer,
-                    registration.namespace
-                );
-            }
-            SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
-                rendezvous::server::Event::DiscoverServed {
-                    enquirer,
-                    registrations,
-                },
-            )) => {
-                tracing::info!(
-                    "Served peer {} with {} registrations",
-                    enquirer,
-                    registrations.len()
-                );
-            }
-            other => {
-                tracing::debug!("Unhandled {:?}", other);
+            */
+
+            event = swarm.select_next_some() => {
+                match event {
+                    SwarmEvent::NewListenAddr { address, .. } => tracing::info!("Listening on {address:?}"),
+                    SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                        tracing::info!("Connected to {}", peer_id);
+                    }
+                    SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                        tracing::info!("Disconnected from {}", peer_id);
+                    }
+                    SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
+                            rendezvous::server::Event::PeerRegistered { peer, registration },
+                    )) => {
+                        tracing::info!(
+                            "Peer {} registered for namespace '{}'",
+                            peer,
+                            registration.namespace
+                        );
+                        peers_set.lock().unwrap().insert(peer);
+                    }
+                    SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
+                            rendezvous::server::Event::DiscoverServed {
+                                enquirer,
+                                registrations,
+                            },
+                    )) => {
+                        tracing::info!(
+                            "Served peer {} with {} registrations",
+                            enquirer,
+                            registrations.len()
+                        );
+                    }
+
+                    SwarmEvent::Behaviour(MyBehaviourEvent::Ping(ping::Event {
+                        peer,
+                        result: Ok(rtt),
+                        ..
+                    })) => {
+                        tracing::info!(%peer, "Ping is {}ms", rtt.as_millis())
+                    }
+
+                    other => {
+                        tracing::debug!("Unhandled {:?}", other);
+                    }
+                }
             }
         }
     }
 
-    Ok(())
 }
 
 #[derive(NetworkBehaviour)]
