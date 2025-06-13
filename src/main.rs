@@ -57,6 +57,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     while let Some(event) = swarm.next().await {
         match event {
+            SwarmEvent::NewListenAddr { address, .. } => tracing::info!("Listening on {address:?}"),
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                 tracing::info!("Connected to {}", peer_id);
             }
