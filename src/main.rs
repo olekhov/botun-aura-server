@@ -1,10 +1,11 @@
-use std::{collections::HashSet, env, error::Error, sync::{Arc, Mutex}, time::Duration};
+use std::{collections::{HashMap, HashSet}, env, error::Error, sync::{Arc, Mutex}, time::Duration};
 
 use axum::{routing::{get, post}, Json, Router};
 use futures::StreamExt;
 use libp2p::{
-    identify, identity::Keypair, noise, ping, rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux, Multiaddr, PeerId, Swarm
+    identify, identity::Keypair, multiaddr::Protocol, noise, ping, rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux, Multiaddr, PeerId, Swarm
 };
+use serde::Serialize;
 use tokio::sync::mpsc;
 use tracing_subscriber::EnvFilter;
 
@@ -25,6 +26,14 @@ fn load_keypair_from_env() -> Keypair {
 
     Keypair::ed25519_from_bytes(key_array)
         .expect("Invalid Ed25519 key")
+}
+
+#[derive(Serialize, Debug, Clone)]
+struct PeerStat {
+    peer: String,
+    address: String,
+    ping: Option<u64>,
+    last_seen: i64,
 }
 
 
@@ -57,15 +66,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     listen_on_all_interfaces(&mut swarm);
 
-    let peers_set = Arc::new(Mutex::new(HashSet::<PeerId>::new()));
-
+    let peers_set = Arc::new(Mutex::new(HashMap::<PeerId, PeerStat>::new()));
     let peers_clone = peers_set.clone();
+
     tokio::spawn(async move {
         let app = Router::new()
             .route("/peers", get({
                 let peers = peers_clone.clone();
                 move || {
-                    let peers = peers.lock().unwrap().clone().iter().map(|p| p.to_string()).collect::<Vec<_>>();
+                    let peers = peers.lock().unwrap().clone().values().cloned().collect::<Vec<_>>();
                     async move { Json(peers) }
                 }
             }))
@@ -109,7 +118,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             peer,
                             registration.namespace
                         );
-                        peers_set.lock().unwrap().insert(peer);
+                        for address in registration.record.addresses() {
+                            let peer = registration.record.peer_id();
+                            tracing::info!(%peer, %address, "Discovered peer");
+
+                            let p2p_suffix = Protocol::P2p(peer);
+                            let address_with_p2p =
+                                if !address.ends_with(&Multiaddr::empty().with(p2p_suffix.clone())) {
+                                    address.clone().with(p2p_suffix)
+                                } else {
+                                    address.clone()
+                                };
+                            peers_set.lock().unwrap().insert(peer,
+                                PeerStat {
+                                    peer: peer.to_string(),
+                                    address: address.to_string(),
+                                    ping: None,
+                                    last_seen: chrono::Local::now().timestamp()
+                                });
+
+                            swarm.dial(address_with_p2p)?;
+                        }
                     }
                     SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
                             rendezvous::server::Event::DiscoverServed {
