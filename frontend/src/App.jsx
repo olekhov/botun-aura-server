@@ -12,6 +12,13 @@ function extractIpFromMultiaddr(addr) {
   return match ? match[1] : null;
 }
 
+function timeAgo(timestamp) {
+  const diff = Math.floor(Date.now() / 1000) - timestamp;
+  if (diff < 60) return `${diff} seconds ago`;
+  const minutes = Math.floor(diff / 60);
+  return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+}
+
 export default function PeerDashboard() {
   const [peers, setPeers] = useState([]);
   const [geoData, setGeoData] = useState({});
@@ -49,7 +56,7 @@ export default function PeerDashboard() {
         <div key={peer.peer} style={{ border: "1px solid #ccc", margin: "1rem 0", padding: "1rem", borderRadius: "8px" }}>
           <div><strong>Peer:</strong> {peer.peer}</div>
           <div><strong>Ping:</strong> {peer.ping} ms</div>
-          <div><strong>Last Seen:</strong> {new Date(peer.last_seen * 1000).toLocaleString()}</div>
+          <div><strong>Last Seen:</strong> {new Date(peer.last_seen * 1000).toLocaleString()} ({timeAgo(peer.last_seen)})</div>
           <div>
             <strong>Addresses:</strong>
             <ul>
