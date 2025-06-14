@@ -31,7 +31,6 @@ fn load_keypair_from_env() -> Keypair {
 #[derive(Serialize, Debug, Clone)]
 struct AddrInfo {
     address: String,
-    ping: Option<u64>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -151,7 +150,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 };
                             addresses.push( AddrInfo {
                                 address: address_with_p2p.to_string(),
-                                ping: None
                             });
                         }
 
