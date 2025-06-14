@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 key.public(),
             )),
             rendezvous: rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
-            ping: ping::Behaviour::new(ping::Config::new().with_interval(Duration::from_secs(1))),
+            ping: ping::Behaviour::new(ping::Config::new().with_interval(Duration::from_secs(10))),
         })?
         .build();
 
