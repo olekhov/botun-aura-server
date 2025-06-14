@@ -79,7 +79,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::spawn(async move {
         let app = Router::new()
-            .nest_service("/", ServeDir::new("dist").not_found_service(ServeDir::new("dist")))
             .route("/peers", get({
                 let peers = peers_clone.clone();
                 move || {
@@ -87,6 +86,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     async move { Json(peers) }
                 }
             }))
+            .fallback_service(ServeDir::new("dist"))
         ;
 
         let listener = tokio::net::TcpListener::bind(api_listen).await.unwrap();
