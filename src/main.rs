@@ -156,7 +156,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         peers_set.lock().unwrap().insert(peer,
                             PeerStat {
                                 peer: peer.to_string(),
-                                address: addresses,
+                                addrinfo: addresses,
                                 last_seen: chrono::Local::now().timestamp()
                             });
 
