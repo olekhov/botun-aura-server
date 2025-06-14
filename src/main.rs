@@ -69,6 +69,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let peers_set = Arc::new(Mutex::new(HashMap::<PeerId, PeerStat>::new()));
     let peers_clone = peers_set.clone();
 
+    let api_listen = env::var("BOTUN_AURA_SERVER_HTTP_ENDPOINT").expect("Http endpoint is not set");
+
     tokio::spawn(async move {
         let app = Router::new()
             .route("/peers", get({
@@ -80,7 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }))
         ;
 
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:8001").await.unwrap();
+        let listener = tokio::net::TcpListener::bind(api_listen).await.unwrap();
 
         axum::serve(listener, app)
             .await
@@ -92,14 +94,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     loop {
 
         tokio::select! {
-            /*
             _ = ping_peers_tick.tick() => {
-                for peer in peers_set.lock().unwrap().iter() {
+                for (peer, _stat) in peers_set.lock().unwrap().iter() {
                     tracing::info!("Pinging {peer}");
                     swarm.dial(*peer)?;
                 }
             }
-            */
 
             event = swarm.select_next_some() => {
                 match event {
