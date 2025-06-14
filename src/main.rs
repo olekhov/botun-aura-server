@@ -183,7 +183,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         ..
                     })) => {
                         tracing::info!(%peer, "Ping is {}ms", rtt.as_millis());
-                        peers_set.lock().unwrap().get_mut(&peer).unwrap().ping = Some(rtt.as_millis() as u64);
+                        if let Some(peer_stats) = peers_set.lock().unwrap().get_mut(&peer) {
+                            peer_stats.ping = Some(rtt.as_millis() as u64);
+                            peer_stats.last_seen = chrono::Local::now().timestamp();
+                        }
                     }
 
                     other => {
