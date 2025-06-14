@@ -7,6 +7,7 @@ use libp2p::{
 };
 use serde::Serialize;
 use tokio::sync::mpsc;
+use tower_http::services::ServeDir;
 use tracing_subscriber::EnvFilter;
 
 use dotenv;
@@ -78,6 +79,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::spawn(async move {
         let app = Router::new()
+            .nest_service("/", ServeDir::new("dist").not_found_service(ServeDir::new("dist")))
             .route("/peers", get({
                 let peers = peers_clone.clone();
                 move || {
