@@ -37,7 +37,7 @@ struct AddrInfo {
 #[derive(Serialize, Debug, Clone)]
 struct PeerStat {
     peer: String,
-    address: Vec<AddrInfo>,
+    addrinfo: Vec<AddrInfo>,
     last_seen: i64,
 }
 
@@ -100,9 +100,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         tokio::select! {
             _ = ping_peers_tick.tick() => {
-                for (peer, _stat) in peers_set.lock().unwrap().iter() {
-                    tracing::info!("Pinging {peer}");
-                    swarm.dial(*peer)?;
+                for (peer, stat) in peers_set.lock().unwrap().iter() {
+                    tracing::info!("Checking peer: {peer}");
+                    for addr in stat.addrinfo {
+                        let ma: Multiaddr = addr.address.parse()?;
+                        if let Err(e) = swarm.dial(ma) {
+                            tracing::error!("Failed to dial {}", addr.address);
+                        }
+                    }
                 }
             }
 
