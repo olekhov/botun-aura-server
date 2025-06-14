@@ -102,10 +102,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             _ = ping_peers_tick.tick() => {
                 for (peer, stat) in peers_set.lock().unwrap().iter() {
                     tracing::info!("Checking peer: {peer}");
-                    for addr in stat.addrinfo {
+                    for addr in stat.addrinfo.iter() {
                         let ma: Multiaddr = addr.address.parse()?;
                         if let Err(e) = swarm.dial(ma) {
-                            tracing::error!("Failed to dial {}", addr.address);
+                            tracing::error!("Failed to dial {}: {}", addr.address, e);
                         }
                     }
                 }
