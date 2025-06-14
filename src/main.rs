@@ -38,6 +38,7 @@ struct AddrInfo {
 struct PeerStat {
     peer: String,
     addrinfo: Vec<AddrInfo>,
+    ping: Option<u64>,
     last_seen: i64,
 }
 
@@ -52,7 +53,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let keypair = load_keypair_from_env();
 
-    let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
+    let mut swarm :Swarm<MyBehaviour> = libp2p::SwarmBuilder::with_existing_identity(keypair)
         .with_tokio()
         .with_tcp(
             tcp::Config::default(),
@@ -94,7 +95,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .unwrap();
     });
 
-    let mut ping_peers_tick = tokio::time::interval(Duration::from_secs(10));
+    let mut ping_peers_tick = tokio::time::interval(Duration::from_secs(60));
 
     loop {
 
@@ -153,11 +154,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 ping: None
                             });
                         }
+
                         peers_set.lock().unwrap().insert(peer,
                             PeerStat {
                                 peer: peer.to_string(),
                                 addrinfo: addresses,
-                                last_seen: chrono::Local::now().timestamp()
+                                last_seen: chrono::Local::now().timestamp(),
+                                ping: None,
                             });
 
                     }
@@ -179,7 +182,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         result: Ok(rtt),
                         ..
                     })) => {
-                        tracing::info!(%peer, "Ping is {}ms", rtt.as_millis())
+                        tracing::info!(%peer, "Ping is {}ms", rtt.as_millis());
+                        peers_set.lock().unwrap().get_mut(&peer).unwrap().ping = Some(rtt.as_millis() as u64);
                     }
 
                     other => {
