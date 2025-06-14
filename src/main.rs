@@ -29,10 +29,15 @@ fn load_keypair_from_env() -> Keypair {
 }
 
 #[derive(Serialize, Debug, Clone)]
+struct AddrInfo {
+    address: String,
+    ping: Option<u64>,
+}
+
+#[derive(Serialize, Debug, Clone)]
 struct PeerStat {
     peer: String,
-    address: Vec<String>,
-    ping: Option<u64>,
+    address: Vec<AddrInfo>,
     last_seen: i64,
 }
 
@@ -138,13 +143,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 } else {
                                     address.clone()
                                 };
-                            addresses.push(address_with_p2p.to_string());
+                            addresses.push( AddrInfo {
+                                address: address_with_p2p.to_string(),
+                                ping: None
+                            });
                         }
                         peers_set.lock().unwrap().insert(peer,
                             PeerStat {
                                 peer: peer.to_string(),
                                 address: addresses,
-                                ping: None,
                                 last_seen: chrono::Local::now().timestamp()
                             });
 
