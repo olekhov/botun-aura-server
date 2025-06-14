@@ -111,6 +111,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         tracing::info!("Disconnected from {}", peer_id);
                     }
                     SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
+                            rendezvous::server::Event::RegistrationExpired( registration ),
+                    )) => {
+                        tracing::info!( "Peer {} registeration expired", registration.record.peer_id() );
+                        peers_set.lock().unwrap().remove(&registration.record.peer_id());
+                    }
+                    SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
                             rendezvous::server::Event::PeerRegistered { peer, registration },
                     )) => {
                         tracing::info!(
@@ -122,6 +128,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             let peer = registration.record.peer_id();
                             tracing::info!(%peer, %address, "Discovered peer");
 
+                            /*
                             let p2p_suffix = Protocol::P2p(peer);
                             let address_with_p2p =
                                 if !address.ends_with(&Multiaddr::empty().with(p2p_suffix.clone())) {
@@ -129,6 +136,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 } else {
                                     address.clone()
                                 };
+                            */
+
                             peers_set.lock().unwrap().insert(peer,
                                 PeerStat {
                                     peer: peer.to_string(),
@@ -137,7 +146,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     last_seen: chrono::Local::now().timestamp()
                                 });
 
-                            swarm.dial(address_with_p2p)?;
                         }
                     }
                     SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
