@@ -31,7 +31,7 @@ fn load_keypair_from_env() -> Keypair {
 #[derive(Serialize, Debug, Clone)]
 struct PeerStat {
     peer: String,
-    address: String,
+    address: Vec<String>,
     ping: Option<u64>,
     last_seen: i64,
 }
@@ -124,11 +124,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             peer,
                             registration.namespace
                         );
+
+                        let mut addresses = vec![];
+
                         for address in registration.record.addresses() {
                             let peer = registration.record.peer_id();
                             tracing::info!(%peer, %address, "Discovered peer");
 
-                            /*
                             let p2p_suffix = Protocol::P2p(peer);
                             let address_with_p2p =
                                 if !address.ends_with(&Multiaddr::empty().with(p2p_suffix.clone())) {
@@ -136,17 +138,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 } else {
                                     address.clone()
                                 };
-                            */
-
-                            peers_set.lock().unwrap().insert(peer,
-                                PeerStat {
-                                    peer: peer.to_string(),
-                                    address: address.to_string(),
-                                    ping: None,
-                                    last_seen: chrono::Local::now().timestamp()
-                                });
-
+                            addresses.push(address_with_p2p.to_string());
                         }
+                        peers_set.lock().unwrap().insert(peer,
+                            PeerStat {
+                                peer: peer.to_string(),
+                                address: addresses,
+                                ping: None,
+                                last_seen: chrono::Local::now().timestamp()
+                            });
+
                     }
                     SwarmEvent::Behaviour(MyBehaviourEvent::Rendezvous(
                             rendezvous::server::Event::DiscoverServed {
