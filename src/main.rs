@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .unwrap();
     });
 
-    let mut ping_peers_tick = tokio::time::interval(Duration::from_secs(60));
+    let mut ping_peers_tick = tokio::time::interval(Duration::from_secs(10));
 
     loop {
 
